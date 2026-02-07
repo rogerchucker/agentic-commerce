@@ -86,13 +86,6 @@ jobs:
         with:
           token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
 
-      - name: Authenticate doctl
-        env:
-          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
-        run: |
-          doctl auth init -t "$DIGITALOCEAN_ACCESS_TOKEN" --context default
-          doctl auth init -t "$DIGITALOCEAN_ACCESS_TOKEN" --context dev
-
       - name: Configure kubeconfig
         env:
           KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_B64 }}
@@ -100,6 +93,16 @@ jobs:
           mkdir -p "$HOME/.kube"
           echo "$KUBE_CONFIG_B64" | base64 --decode > "$HOME/.kube/config"
           chmod 600 "$HOME/.kube/config"
+
+      - name: Authenticate doctl for kubeconfig context
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+        run: |
+          DOCTL_CONTEXT="$(grep -Eo -- '--context(=| )[A-Za-z0-9._-]+' \"$HOME/.kube/config\" | head -n1 | sed -E 's/^--context(=| )//')"
+          if [ -z "$DOCTL_CONTEXT" ]; then
+            DOCTL_CONTEXT="default"
+          fi
+          doctl auth init -t "$DIGITALOCEAN_ACCESS_TOKEN" --context "$DOCTL_CONTEXT"
 
       - name: Validate required deployment secrets
         env:
