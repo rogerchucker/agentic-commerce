@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+.pytest_cache/
+.ruff_cache/
+load/reports/
+.DS_Store
