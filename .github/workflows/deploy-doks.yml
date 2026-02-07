@@ -89,6 +89,26 @@ jobs:
           echo "$KUBE_CONFIG_B64" | base64 --decode > "$HOME/.kube/config"
           chmod 600 "$HOME/.kube/config"
 
+      - name: Validate required deployment secrets
+        env:
+          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_B64 }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          test -n "$KUBE_CONFIG_B64" || (echo "Missing secret: KUBE_CONFIG_B64" && exit 1)
+          test -n "$JWT_SECRET" || (echo "Missing secret: JWT_SECRET" && exit 1)
+          test -n "$SUPABASE_DB_URL" || (echo "Missing secret: SUPABASE_DB_URL" && exit 1)
+
+      - name: Deploy observability stack
+        run: |
+          kubectl create namespace observability --dry-run=client -o yaml | kubectl apply -f -
+          kubectl apply -f deploy/doks/observability/k8s/observability-stack.yaml
+
+          kubectl -n observability rollout status deploy/alloy --timeout=300s
+          kubectl -n observability rollout status deploy/prometheus --timeout=300s
+          kubectl -n observability rollout status deploy/loki --timeout=300s
+          kubectl -n observability rollout status deploy/grafana --timeout=300s
+
       - name: Deploy wallet service to DOKS
         env:
           IMAGE_REF: ${{ needs.build-and-push.outputs.image_ref }}
@@ -114,3 +134,7 @@ jobs:
       - name: Post-deploy readiness check
         run: |
           kubectl -n "$NAMESPACE" get pods -l app=wallet-service
+          kubectl -n observability get pods
+          kubectl -n "$NAMESPACE" run readiness-check --rm -i --restart=Never \
+            --image=curlimages/curl:8.10.1 -- \
+            curl -fsS http://wallet-service:8080/v1/ready
