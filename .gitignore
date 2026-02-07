@@ -6,3 +6,5 @@ __pycache__/
 .ruff_cache/
 load/reports/
 .DS_Store
+
+collector-output.txt
