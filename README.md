@@ -135,7 +135,7 @@ Pick one service access method and export `BASE_URL` before running k6.
 
 1. Ingress/LB endpoint (recommended for production-like tests):
 ```bash
-export BASE_URL="https://wallet.<your-domain>"
+export BASE_URL="https://<your-domain>"
 ```
 
 2. Local port-forward to the DOKS service:
