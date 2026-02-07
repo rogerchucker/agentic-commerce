@@ -14,6 +14,7 @@ class Settings(BaseSettings):
 
     database_url: str | None = Field(default=None)
     db_connect_timeout_seconds: int = 3
+    supabase_db_url: str | None = None
     supabase_url: str | None = None
     supabase_key: str | None = None
     supabase_db_name: str = "wallet_service"
@@ -37,6 +38,10 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def resolve_database_url(self):
         if self.database_url:
+            return self
+
+        if self.supabase_db_url:
+            self.database_url = self.supabase_db_url
             return self
 
         if self.supabase_url and self.supabase_key:

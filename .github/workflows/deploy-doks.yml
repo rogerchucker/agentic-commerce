@@ -93,8 +93,7 @@ jobs:
         env:
           IMAGE_REF: ${{ needs.build-and-push.outputs.image_ref }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           IMAGE_REPOSITORY="${IMAGE_REF%:*}"
           IMAGE_TAG="${IMAGE_REF##*:}"
@@ -106,8 +105,7 @@ jobs:
             --set image.repository="$IMAGE_REPOSITORY" \
             --set image.tag="$IMAGE_TAG" \
             --set secretEnv.JWT_SECRET="$JWT_SECRET" \
-            --set secretEnv.SUPABASE_URL="$SUPABASE_URL" \
-            --set secretEnv.SUPABASE_KEY="$SUPABASE_KEY" \
+            --set secretEnv.SUPABASE_DB_URL="$SUPABASE_DB_URL" \
             --set env.DATABASE_URL="" \
             --set env.OTEL_EXPORTER_OTLP_ENDPOINT='http://alloy.observability.svc.cluster.local:4318'
 

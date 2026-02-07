@@ -32,6 +32,11 @@ spec:
                 secretKeyRef:
                   name: wallet-service-secrets
                   key: JWT_SECRET
+            - name: SUPABASE_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: wallet-service-secrets
+                  key: SUPABASE_DB_URL
             - name: SUPABASE_URL
               valueFrom:
                 secretKeyRef:
