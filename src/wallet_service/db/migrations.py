@@ -4,7 +4,18 @@ from wallet_service.db.database import get_connection
 
 
 def apply_migrations() -> None:
-    migration_dir = Path(__file__).resolve().parents[3] / "migrations"
+    # In dev, we run from the repo. In deployed images we install the package into
+    # site-packages but copy SQL migrations into /app/migrations. Prefer runtime
+    # locations that actually exist in the container, and fail closed if none do.
+    candidates = [
+        Path.cwd() / "migrations",
+        Path("/app/migrations"),
+        Path(__file__).resolve().parents[3] / "migrations",
+    ]
+    migration_dir: Path | None = next((p for p in candidates if p.exists() and p.is_dir()), None)
+    if migration_dir is None:
+        raise RuntimeError("migrations directory not found (looked in: " + ", ".join(map(str, candidates)) + ")")
+
     files = sorted(migration_dir.glob("*.sql"))
 
     with get_connection() as conn:
