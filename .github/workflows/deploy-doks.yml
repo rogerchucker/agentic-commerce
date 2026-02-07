@@ -94,9 +94,9 @@ jobs:
           mkdir -p "$HOME/.kube"
           echo "$KUBE_CONFIG_B64" | base64 --decode > "$HOME/.kube/config"
           chmod 600 "$HOME/.kube/config"
-          cat > /tmp/doctl-auth.sh <<'EOF'
+          cat > /tmp/doctl-auth.sh <<EOF
           #!/usr/bin/env bash
-          exec doctl --access-token "${DIGITALOCEAN_ACCESS_TOKEN:?DIGITALOCEAN_ACCESS_TOKEN is required}" "$@"
+          exec doctl --access-token '${DIGITALOCEAN_ACCESS_TOKEN}' "\$@"
           EOF
           chmod +x /tmp/doctl-auth.sh
           sed -i.bak 's|command: doctl|command: /tmp/doctl-auth.sh|g' "$HOME/.kube/config"
