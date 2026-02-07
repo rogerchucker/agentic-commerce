@@ -81,6 +81,11 @@ jobs:
       - name: Set up Helm
         uses: azure/setup-helm@v4
 
+      - name: Set up doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
       - name: Configure kubeconfig
         env:
           KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_B64 }}
@@ -92,10 +97,12 @@ jobs:
       - name: Validate required deployment secrets
         env:
           KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_B64 }}
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           test -n "$KUBE_CONFIG_B64" || (echo "Missing secret: KUBE_CONFIG_B64" && exit 1)
+          test -n "$DIGITALOCEAN_ACCESS_TOKEN" || (echo "Missing secret: DIGITALOCEAN_ACCESS_TOKEN" && exit 1)
           test -n "$JWT_SECRET" || (echo "Missing secret: JWT_SECRET" && exit 1)
           test -n "$SUPABASE_DB_URL" || (echo "Missing secret: SUPABASE_DB_URL" && exit 1)
 
