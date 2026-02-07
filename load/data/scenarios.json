@@ -1,0 +1,27 @@
+{
+  "scenarios": [
+    {
+      "name": "micro_transfers_hot_wallets",
+      "description": "High-frequency micro transfers among hot wallet set",
+      "hot_wallet_count": 100,
+      "amount_min": 0.01,
+      "amount_max": 2.50
+    },
+    {
+      "name": "fanout_settlement",
+      "description": "One source wallet fan-out to many targets",
+      "fanout_size": 50,
+      "amount": 1.00
+    },
+    {
+      "name": "retry_storm",
+      "description": "Repeated idempotency keys under retries",
+      "duplicate_ratio": 0.2
+    },
+    {
+      "name": "read_heavy_reconciliation",
+      "description": "Mix of balance reads and occasional transfers",
+      "read_ratio": 0.85
+    }
+  ]
+}

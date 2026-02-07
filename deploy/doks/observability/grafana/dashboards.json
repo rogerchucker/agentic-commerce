@@ -1,0 +1,10 @@
+{
+  "title": "Wallet Service Overview",
+  "panels": [
+    {"title": "Request Rate", "type": "timeseries"},
+    {"title": "p95 Latency", "type": "timeseries"},
+    {"title": "Error Rate", "type": "timeseries"},
+    {"title": "Transactions Committed", "type": "timeseries"},
+    {"title": "DB Availability", "type": "stat"}
+  ]
+}

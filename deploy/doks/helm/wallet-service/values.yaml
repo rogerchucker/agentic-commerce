@@ -1,0 +1,41 @@
+replicaCount: 3
+
+image:
+  repository: ghcr.io/example/wallet-service
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8080
+
+env:
+  DATABASE_URL: postgresql://wallet:wallet@postgresql.default.svc.cluster.local:5432/wallet_service
+  JWT_AUDIENCE: agentic-commerce
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy.default.svc.cluster.local:4318
+
+secretEnv:
+  JWT_SECRET: change-me
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 15
+  targetCPUUtilizationPercentage: 70
+
+ingress:
+  enabled: false
+  className: nginx
+  hosts:
+    - host: wallet.example.com
+      paths:
+        - path: /
+          pathType: Prefix
