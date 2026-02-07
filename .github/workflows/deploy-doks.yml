@@ -154,6 +154,7 @@ jobs:
         run: |
           kubectl -n "$NAMESPACE" get pods -l app=wallet-service
           kubectl -n observability get pods
-          kubectl -n "$NAMESPACE" run readiness-check --rm -i --restart=Never \
+          POD_NAME="readiness-check-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          kubectl -n "$NAMESPACE" run "$POD_NAME" --rm -i --restart=Never \
             --image=curlimages/curl:8.10.1 -- \
             curl -fsS http://wallet-service:8080/v1/ready
