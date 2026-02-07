@@ -129,6 +129,46 @@ uv run python scripts/seed_wallets.py --count 3000
 - No duplicate committed effects for repeated idempotency keys.
 - During DB partition/outage windows, writes fail with 503 (fail-closed).
 
+### Production load testing against DOKS
+
+Pick one service access method and export `BASE_URL` before running k6.
+
+1. Ingress/LB endpoint (recommended for production-like tests):
+```bash
+export BASE_URL="https://wallet.<your-domain>"
+```
+
+2. Local port-forward to the DOKS service:
+```bash
+kubectl -n wallet-prod port-forward svc/wallet-service 8080:8080
+export BASE_URL="http://localhost:8080"
+```
+
+Seed wallets against the cluster endpoint:
+```bash
+uv run python scripts/seed_wallets.py --base-url "$BASE_URL" --count 3000
+```
+
+Run production k6 profiles:
+```bash
+BASE_URL="$BASE_URL" k6 run load/k6/smoke.js
+BASE_URL="$BASE_URL" k6 run load/k6/baseline.js
+BASE_URL="$BASE_URL" k6 run load/k6/spike.js
+BASE_URL="$BASE_URL" k6 run load/k6/soak.js
+```
+
+Run production resiliency profile during controlled fault injection windows:
+```bash
+BASE_URL="$BASE_URL" k6 run load/k6/resiliency_partition.js
+```
+
+Synthetic traffic scenarios are defined in `load/data/scenarios.json` and reflected by these scripts:
+- `scripts/seed_wallets.py` for deterministic wallet/account seeding.
+- `load/k6/baseline.js` for sustained hot-wallet micro-transfers.
+- `load/k6/spike.js` for burst/fanout stress windows.
+- `load/k6/soak.js` for long-running mixed read/write traffic.
+- `load/k6/resiliency_partition.js` for retry/partition behavior validation.
+
 ## Observability: OpenTelemetry + Alloy + Prometheus + Loki + Grafana
 
 Service emits OTLP traces/metrics/logs to Alloy.
@@ -148,6 +188,80 @@ Recommended dashboard panels:
 - Idempotency conflict rate
 - DB availability/readiness health
 
+### Production install on DOKS (full stack)
+
+Use a dedicated namespace:
+```bash
+kubectl create namespace observability --dry-run=client -o yaml | kubectl apply -f -
+```
+
+Add Helm repos:
+```bash
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
+```
+
+Install Prometheus:
+```bash
+helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+  -n observability \
+  --set grafana.enabled=false
+```
+
+Install Loki:
+```bash
+helm upgrade --install loki grafana/loki \
+  -n observability
+```
+
+Install Grafana:
+```bash
+helm upgrade --install grafana grafana/grafana \
+  -n observability \
+  --set adminUser=admin \
+  --set adminPassword='<strong-admin-password>'
+```
+
+Install Alloy:
+```bash
+helm upgrade --install alloy grafana/alloy \
+  -n observability
+```
+
+Apply project configs from this repo:
+```bash
+kubectl -n observability create configmap alloy-config \
+  --from-file=config.alloy=deploy/doks/observability/alloy/config.alloy \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+kubectl -n observability create configmap wallet-prometheus-config \
+  --from-file=prometheus.yml=deploy/doks/observability/prometheus/prometheus.yml \
+  --from-file=alerts.yml=deploy/doks/observability/prometheus/alerts.yml \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+kubectl -n observability create configmap wallet-loki-config \
+  --from-file=loki-config.yaml=deploy/doks/observability/loki/loki-config.yaml \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+Set wallet-service OTLP endpoint to Alloy in DOKS:
+```bash
+helm upgrade --install wallet-service deploy/doks/helm/wallet-service \
+  --namespace wallet-prod --create-namespace \
+  --set image.repository=ghcr.io/<org>/wallet-service \
+  --set image.tag=latest \
+  --set secretEnv.JWT_SECRET='<secure-secret>' \
+  --set env.OTEL_EXPORTER_OTLP_ENDPOINT='http://alloy.observability.svc.cluster.local:4318'
+```
+
+Validate observability stack:
+```bash
+kubectl -n observability get pods
+kubectl -n wallet-prod get pods
+kubectl -n wallet-prod logs deploy/wallet-service | rg -n "OTLP|error|timeout" || true
+```
+
 ## Deployment
 
 ## DigitalOcean Kubernetes (DOKS) - Primary
@@ -161,17 +275,22 @@ docker push ghcr.io/<org>/wallet-service:latest
 2. Deploy wallet chart:
 ```bash
 helm upgrade --install wallet-service deploy/doks/helm/wallet-service \
+  --namespace wallet-prod --create-namespace \
   --set image.repository=ghcr.io/<org>/wallet-service \
   --set image.tag=latest \
-  --set secretEnv.JWT_SECRET='<secure-secret>'
+  --set secretEnv.JWT_SECRET='<secure-secret>' \
+  --set env.OTEL_EXPORTER_OTLP_ENDPOINT='http://alloy.observability.svc.cluster.local:4318'
 ```
 
-3. Deploy observability stack components (Alloy/Prometheus/Loki/Grafana) using the configs under `deploy/doks/observability`.
+3. Install the production observability stack using the commands in:
+- `Observability: OpenTelemetry + Alloy + Prometheus + Loki + Grafana`
+- `Production install on DOKS (full stack)`
 
 4. Validate:
 ```bash
-kubectl get pods
-kubectl port-forward svc/wallet-service 8080:8080
+kubectl -n wallet-prod get pods
+kubectl -n observability get pods
+kubectl -n wallet-prod port-forward svc/wallet-service 8080:8080
 curl http://localhost:8080/v1/ready
 ```
 
