@@ -16,6 +16,8 @@ env:
 
 secretEnv:
   JWT_SECRET: change-me
+  SUPABASE_URL: ""
+  SUPABASE_KEY: ""
 
 resources:
   requests:

@@ -72,6 +72,10 @@ uv sync --extra dev
 
 ### Environment Variables
 - `DATABASE_URL` (default: `postgresql://raj@localhost:5432/wallet_service`)
+- `SUPABASE_URL` (optional; used when `DATABASE_URL` is not set)
+- `SUPABASE_KEY` (optional; used with `SUPABASE_URL` when `DATABASE_URL` is not set)
+- `SUPABASE_DB_NAME` (default: `wallet_service`)
+- `SUPABASE_DB_USER` (default: `postgres`)
 - `JWT_SECRET` (default: `dev-secret-change-me`)
 - `JWT_AUDIENCE` (default: `agentic-commerce`)
 - `OTEL_EXPORTER_OTLP_ENDPOINT` (default: `http://localhost:4318`)
@@ -279,6 +283,9 @@ helm upgrade --install wallet-service deploy/doks/helm/wallet-service \
   --set image.repository=ghcr.io/<org>/wallet-service \
   --set image.tag=latest \
   --set secretEnv.JWT_SECRET='<secure-secret>' \
+  --set secretEnv.SUPABASE_URL='<supabase-postgres-url-or-project-url>' \
+  --set secretEnv.SUPABASE_KEY='<supabase-db-password-or-key>' \
+  --set env.DATABASE_URL='' \
   --set env.OTEL_EXPORTER_OTLP_ENDPOINT='http://alloy.observability.svc.cluster.local:4318'
 ```
 
@@ -307,6 +314,31 @@ Service becomes available at `http://localhost:8080`.
 CI workflow: `.github/workflows/ci.yaml`
 - Installs via `uv`.
 - Runs full pytest suite against PostgreSQL service.
+
+### GitHub Actions production deploy to existing DOKS cluster
+
+Deployment workflow:
+- `.github/workflows/deploy-doks.yml`
+
+This workflow:
+1. Runs tests.
+2. Builds and pushes a container image to GHCR.
+3. Connects to your existing DOKS cluster using kubeconfig from secrets.
+4. Deploys with Helm into `wallet-prod`.
+5. Injects Supabase secrets into the pod as environment variables.
+
+Required GitHub repository secrets:
+- `KUBE_CONFIG_B64`: base64-encoded kubeconfig for the existing DOKS cluster
+- `JWT_SECRET`: JWT signing secret for service auth
+- `SUPABASE_URL`: Supabase connection URL/project URL
+- `SUPABASE_KEY`: Supabase DB password/key used to compose DB connection
+
+For this deployment, DB name is `wallet_service` (`SUPABASE_DB_NAME` default).
+
+Trigger deployment:
+```bash
+gh workflow run "Deploy DOKS Wallet Service"
+```
 
 Recommended release gate extension:
 1. Unit + integration + reliability tests pass.

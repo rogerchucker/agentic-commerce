@@ -1,0 +1,118 @@
+name: Deploy DOKS Wallet Service
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/agentic-commerce-wallet
+  NAMESPACE: wallet-prod
+  RELEASE_NAME: wallet-service
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: raj
+          POSTGRES_DB: wallet_service
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U raj -d wallet_service"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - name: Install dependencies
+        run: uv sync --extra dev
+      - name: Run tests
+        env:
+          TEST_DATABASE_URL: postgresql://raj@localhost:5432/wallet_service
+        run: uv run pytest
+
+  build-and-push:
+    runs-on: ubuntu-latest
+    needs: test
+    outputs:
+      image_ref: ${{ steps.image_meta.outputs.image_ref }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        id: image_meta
+        run: |
+          IMAGE_REF="${REGISTRY}/${IMAGE_NAME}:${GITHUB_SHA}"
+          IMAGE_LATEST="${REGISTRY}/${IMAGE_NAME}:latest"
+          docker build -t "$IMAGE_REF" -t "$IMAGE_LATEST" .
+          docker push "$IMAGE_REF"
+          docker push "$IMAGE_LATEST"
+          echo "image_ref=$IMAGE_REF" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Configure kubeconfig
+        env:
+          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_B64 }}
+        run: |
+          mkdir -p "$HOME/.kube"
+          echo "$KUBE_CONFIG_B64" | base64 --decode > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+
+      - name: Deploy wallet service to DOKS
+        env:
+          IMAGE_REF: ${{ needs.build-and-push.outputs.image_ref }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          IMAGE_REPOSITORY="${IMAGE_REF%:*}"
+          IMAGE_TAG="${IMAGE_REF##*:}"
+
+          kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+
+          helm upgrade --install "$RELEASE_NAME" deploy/doks/helm/wallet-service \
+            --namespace "$NAMESPACE" \
+            --set image.repository="$IMAGE_REPOSITORY" \
+            --set image.tag="$IMAGE_TAG" \
+            --set secretEnv.JWT_SECRET="$JWT_SECRET" \
+            --set secretEnv.SUPABASE_URL="$SUPABASE_URL" \
+            --set secretEnv.SUPABASE_KEY="$SUPABASE_KEY" \
+            --set env.DATABASE_URL="" \
+            --set env.OTEL_EXPORTER_OTLP_ENDPOINT='http://alloy.observability.svc.cluster.local:4318'
+
+          kubectl -n "$NAMESPACE" rollout status deploy/wallet-service --timeout=300s
+
+      - name: Post-deploy readiness check
+        run: |
+          kubectl -n "$NAMESPACE" get pods -l app=wallet-service
