@@ -89,7 +89,9 @@ jobs:
       - name: Authenticate doctl
         env:
           DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
-        run: doctl auth init -t "$DIGITALOCEAN_ACCESS_TOKEN"
+        run: |
+          doctl auth init -t "$DIGITALOCEAN_ACCESS_TOKEN" --context default
+          doctl auth init -t "$DIGITALOCEAN_ACCESS_TOKEN" --context dev
 
       - name: Configure kubeconfig
         env:
